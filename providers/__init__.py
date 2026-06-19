@@ -1,12 +1,12 @@
 from typing import List, Dict, Any
 from .jiosaavn import JioSaavnProvider
+from .youtube import YouTubeProvider
 from .jamendo import JamendoProvider
-from .deezer import DeezerProvider
 
 ALL_PROVIDERS = [
     JioSaavnProvider(),
-    DeezerProvider(),
-    JamendoProvider(),
+    YouTubeProvider(),   # Full songs from YouTube
+    JamendoProvider(),   # Full royalty-free songs
 ]
 
 def search_all(query: str, limit: int = 20, sources: List[str] | None = None) -> List[Dict[str, Any]]:
@@ -40,4 +40,4 @@ def trending_all(limit: int = 20) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"[Provider ERROR] {provider.name}: {e}")
     return results
-      
+            
