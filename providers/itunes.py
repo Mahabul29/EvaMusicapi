@@ -1,55 +1,55 @@
 import requests
 from .base import MusicProvider
 
-class iTunesProvider(MusicProvider):
+class ItunesProvider(MusicProvider):
     name = "itunes"
+
+    def _format_song(self, track: dict) -> dict:
+        if not track:
+            return {}
+
+        # Upgrade artwork resolution from 100x100 to 500x500
+        artwork = track.get("artworkUrl100", "/static/images/default-album.png")
+        high_res_artwork = artwork.replace("100x100bb.jpg", "500x500bb.jpg")
+
+        track_id = track.get("trackId", "")
+
+        return {
+            "id":       str(track_id),
+            "title":    track.get("trackName", "Unknown Title"),
+            "artist":   track.get("artistName", "Unknown Artist"),
+            "album":    track.get("collectionName", "Unknown Album"),
+            "image":    high_res_artwork,
+            "url":      track.get("previewUrl", f"placeholder_for_itunes_{track_id}"),
+            "duration": int(track.get("trackTimeMillis", 0) / 1000),
+            "year":     track.get("releaseDate", "")[:4] if track.get("releaseDate") else "",
+            "source":   "itunes",
+        }
 
     def search(self, query: str, limit: int = 20):
         try:
-            r = requests.get(
-                "https://itunes.apple.com/search",
-                params={"term": query, "media": "music", "entity": "song", "limit": limit},
-                timeout=15
-            )
-            if r.status_code != 200:
-                return []
-            results = r.json().get("results", [])
-            return [self._format(t) for t in results]
+            url = f"https://itunes.apple.com/search?term={requests.utils.quote(query)}&limit={limit}&entity=song"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                return [self._format_song(t) for t in results]
         except Exception as e:
-            print(f"[iTunes ERROR] {e}")
-            return []
+            print(f"[ITUNES ERROR] Search failed: {e}")
+        return []
 
-    def song(self, track_id: str):
+    def song(self, song_id: str):
         try:
-            r = requests.get(
-                "https://itunes.apple.com/lookup",
-                params={"id": track_id},
-                timeout=15
-            )
-            if r.status_code != 200:
-                return None
-            results = r.json().get("results", [])
-            return self._format(results[0]) if results else None
+            url = f"https://itunes.apple.com/lookup?id={song_id}"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                if results:
+                    return self._format_song(results[0])
         except Exception as e:
-            print(f"[iTunes ERROR] {e}")
-            return None
+            print(f"[ITUNES ERROR] Song lookup failed: {e}")
+        return None
 
     def trending(self, limit: int = 20):
-        # iTunes doesn't have a trending endpoint, search popular terms
-        return self.search("top hits 2024", limit)
-
-    def _format(self, track):
-        if not track:
-            return {}
-        return {
-            "id": str(track.get("trackId", "")),
-            "title": track.get("trackName", "Unknown Title"),
-            "artist": track.get("artistName", "Unknown Artist"),
-            "album": track.get("collectionName", "Unknown Album"),
-            "image": track.get("artworkUrl100", "").replace("100x100", "600x600"),
-            "url": track.get("previewUrl", ""),  # 30s preview only!
-            "duration": track.get("trackTimeMillis", 0) // 1000,
-            "year": str(track.get("releaseDate", ""))[:4] if track.get("releaseDate") else "",
-            "source": "itunes",
-          }
-      
+        # Fallback to a popular search phrase since iTunes doesn't expose a clean trending endpoint easily
+        return self.search("Top Hits", limit=limit)
+                
