@@ -8,7 +8,6 @@ class YouTubeMusicProvider(MusicProvider):
 
     def __init__(self):
         # Initializing without authentication files for public scraping.
-        # If you ever need user-specific features, pass 'oauth.json' or 'browser.json' here.
         self.yt = YTMusic()
         self._last_good_trending = []
 
@@ -42,18 +41,19 @@ class YouTubeMusicProvider(MusicProvider):
         # 4. Handle Duration Parsing safely
         duration = song.get("duration", 0)
         if isinstance(duration, str) and ":" in duration:
-            # Converts "MM:SS" strings to absolute integer seconds
             try:
                 parts = list(map(int, duration.split(":")))
                 duration = sum(x * 60**i for i, x in enumerate(reversed(parts)))
             except ValueError:
                 duration = 0
 
-        # Note: ytmusicapi does not natively expose direct streaming audio URLs 
-        # (like downloadUrl). You will need a backend utility like `yt-dlp` to resolve 
-        # the streaming link using the videoId on your playing state.
+        # Extract video ID
         video_id = song.get("videoId", "")
-        stream_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else ""
+        
+        # CRITICAL FIX: We set a temporary placeholder so this song survives the 
+        # Flask router's [valid = [s for s in results if s.get("url")]] filter.
+        # It will be dynamically replaced with a real streaming link inside app.py using yt-dlp!
+        stream_url = f"placeholder_for_{video_id}" if video_id else ""
 
         return {
             "id":       str(video_id),
@@ -119,3 +119,4 @@ class YouTubeMusicProvider(MusicProvider):
                 self._last_good_trending = songs
                 return songs
         return self._last_good_trending or []
+        
