@@ -86,7 +86,7 @@ def api_song(song_id, source=None):
         return jsonify({"error": f"Track could not be resolved from provider: {source}"}), 404
 
     # 4. CRITICAL INTERCEPTOR FORCE-PLAY PIPELINE
-    # If the source belongs to a metadata engine or preview-limited service,
+    # If the source belongs to a 30-sec restricted or metadata provider,
     # we intercept it and immediately convert it to a full YouTube stream.
     if source in ["itunes", "lastfm", "audiomack"]:
         search_target = f"{song['title']} {song['artist']}"
@@ -105,7 +105,7 @@ def api_song(song_id, source=None):
                     if resolved_stream:
                         print(f"[RESOLVER] Successfully found match! Video ID: {target_video_id}")
                         song["url"] = resolved_stream
-                        # Swap out the 30-sec limit layout for the real track duration
+                        # Swap out the 30-sec limit layout for the real track duration timeline
                         song["duration"] = matches[0].get("duration", song["duration"])
                         return jsonify(song)
             except Exception as search_err:
@@ -124,7 +124,7 @@ def api_song(song_id, source=None):
         else:
             return jsonify({"error": "Failed to extract direct audio from YouTube asset"}), 404
 
-    # Return directly for stable native streaming setups (like JioSaavn)
+    # Return directly for stable native streaming setups (like JioSaavn, SoundCloud, Hearthis, Jamendo)
     return jsonify(song)
 
 
@@ -154,4 +154,4 @@ def api_debug():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
-        
+            
