@@ -10,22 +10,35 @@ CORS(app)
 
 def resolve_youtube_stream_url(video_id: str) -> str | None:
     """
-    Executes yt-dlp to extract the absolute best direct audio-only stream link
-    from a YouTube video ID.
+    Executes an advanced yt-dlp layer that includes client emulation arguments
+    and drops cache profiles to permanently prevent '403 Forbidden' streaming blockages.
     """
     try:
         video_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Build strict parameters forcing standard consumer media application handshakes
         cmd = [
             "yt-dlp",
-            "-g",                 # Get direct stream URL flag
-            "-f", "bestaudio",    # Grab best audio stream track
+            "--rm-cache-dir",     # Explicitly clear stale response cookies/challenges
+            "-g",                 # Get direct stream URL layout
+            "-f", "bestaudio",    # Grab absolute best available audio
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "--extractor-args", "youtube:player_client=tv_downgraded,mweb", # Emulate robust mobile/TV environments
             video_url
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=12)
-        if result.returncode == 0:
-            return result.stdout.strip()
+        
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=15)
+        
+        if result.returncode == 0 and result.stdout:
+            extracted_url = result.stdout.strip()
+            # Double check that we didn't receive an empty line configuration
+            if extracted_url.startswith("http"):
+                return extracted_url
+        else:
+            print(f"[YT-DLP CLI CRITICAL FAIL] Code: {result.returncode} | Err: {result.stderr.strip()}")
+            
     except Exception as e:
-        print(f"[YT-DLP EXTRACTION ERROR]: {e}")
+        print(f"[YT-DLP RUNTIME EXCEPTION ERROR]: {e}")
     return None
 
 
@@ -50,7 +63,7 @@ def api_search():
     source_list = [s.strip() for s in sources.split(",")] if sources else None
     results = search_all(query, limit, sources=source_list)
 
-    # Allow entries that have valid media links or internal placeholder flags
+    # Filter entries that have valid media links or placeholder tags
     valid = [s for s in results if s.get("url")]
     return jsonify(valid)
 
@@ -73,24 +86,22 @@ def api_song(song_id, source=None):
 
     # 2. Contextual detector if source path parameter wasn't supplied explicitly
     if not source:
-        if song_id.startswith("lastfm_"):
-            source = "lastfm"
-        elif song_id.startswith("audiomack_"):
-            source = "audiomack"
-        else:
-            source = "youtube_music" if len(song_id) == 11 else "jiosaavn"
+        if song_id.startswith("lastfm_"): source = "lastfm"
+        elif song_id.startswith("audiomack_"): source = "audiomack"
+        elif song_id.startswith("deezer_"): source = "deezer"
+        else: source = "youtube_music" if len(song_id) == 11 else "jiosaavn"
 
     # 3. Pull structural dictionary metadata out of your provider class
     song = get_song(song_id, source=source)
     if not song:
         return jsonify({"error": f"Track could not be resolved from provider: {source}"}), 404
 
-    # 4. CRITICAL INTERCEPTOR FORCE-PLAY PIPELINE
+    # 4. CRITICAL THIRD-PARTY INTERCEPTOR FORCE-PLAY PIPELINE
     # If the source belongs to a 30-sec restricted or metadata provider,
-    # we intercept it and immediately convert it to a full YouTube stream.
-    if source in ["itunes", "lastfm", "audiomack"]:
+    # we intercept it and immediately convert it to a full-length YouTube stream.
+    if source in ["itunes", "lastfm", "audiomack", "deezer"]:
         search_target = f"{song['title']} {song['artist']}"
-        print(f"[RESOLVER] Intercepted {source} track. Searching YouTube for full stream: '{search_target}'")
+        print(f"[RESOLVER] Intercepted 3rd-party {source} track. Resolving full stream for: '{search_target}'")
         
         yt_provider = next((p for p in ALL_PROVIDERS if p.name == "youtube_music"), None)
         if yt_provider:
@@ -100,19 +111,18 @@ def api_song(song_id, source=None):
                 if matches and matches[0].get("id"):
                     target_video_id = matches[0]["id"]
                     
-                    # Run it through your yt-dlp direct extractor
+                    # Run it through our new armored browser emulator
                     resolved_stream = resolve_youtube_stream_url(target_video_id)
                     if resolved_stream:
-                        print(f"[RESOLVER] Successfully found match! Video ID: {target_video_id}")
+                        print(f"[RESOLVER] Successfully matched and extracted full stream! ID: {target_video_id}")
                         song["url"] = resolved_stream
-                        # Swap out the 30-sec limit layout for the real track duration timeline
                         song["duration"] = matches[0].get("duration", song["duration"])
                         return jsonify(song)
             except Exception as search_err:
                 print(f"[RESOLVER ERROR] Background matching failed: {search_err}")
                     
-        # If background lookup fails completely, send the data as-is (last resort snippet)
-        print("[RESOLVER ALERT] Fallback search failed. Defaulting back to snippet link.")
+        # Fallback if extractor breaks completely
+        print("[RESOLVER ALERT] Stream matching collapsed. Sending metadata object as-is.")
         return jsonify(song)
 
     # 5. STANDARD STREAM PROCESSING: For direct YouTube Music selections
@@ -154,4 +164,4 @@ def api_debug():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
-            
+                             
