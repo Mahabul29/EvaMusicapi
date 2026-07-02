@@ -4,21 +4,13 @@ from .jiosaavn import JioSaavnProvider
 from .youtube_music import YouTubeMusicProvider
 from .audiomack import AudiomackProvider
 from .lastfm import LastfmProvider
-from .itunes import ItunesProvider
-from .spotify import SpotifyProvider
-from .hyperpipe import HyperpipeProvider
-from .jamendo import JamendoProvider
 
-# Registering all active providers present in your directory
+# Only register the working and fully configured providers
 ALL_PROVIDERS: List[MusicProvider] = [
     JioSaavnProvider(),
     YouTubeMusicProvider(),
     AudiomackProvider(),
-    LastfmProvider(),
-    ItunesProvider(),
-    SpotifyProvider(),
-    HyperpipeProvider(),
-    JamendoProvider()
+    LastfmProvider()
 ]
 
 def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[Dict[str, Any]]:
@@ -49,7 +41,6 @@ def get_song(song_id: str, source: str) -> Dict[str, Any] | None:
 
 def trending_all(limit: int = 20) -> List[Dict[str, Any]]:
     results = []
-    # Primary engines to populate initial home/trending feeds
     for provider in ALL_PROVIDERS:
         try:
             songs = provider.trending(limit=limit)
@@ -58,4 +49,4 @@ def trending_all(limit: int = 20) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"[TRENDING ERROR] Provider {provider.name} failed: {e}")
     return results
-            
+                     
