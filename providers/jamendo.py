@@ -3,68 +3,58 @@ from .base import MusicProvider
 
 class JamendoProvider(MusicProvider):
     name = "jamendo"
-    BASE = "https://api.jamendo.com/v3.0"
-    CLIENT_ID = "8b1b0ea3"
+
+    def __init__(self):
+        # Open community developer client ID
+        self.client_id = "56d30c95"
+
+    def _format_song(self, track: dict) -> dict:
+        if not track:
+            return {}
+
+        return {
+            "id":       str(track.get("id", "")),
+            "title":    track.get("name", "Unknown Title"),
+            "artist":   track.get("artist_name", "Unknown Artist"),
+            "album":    track.get("album_name", "Unknown Album"),
+            "image":    track.get("album_image", "/static/images/default-album.png"),
+            "url":      track.get("audio", ""),  # Full audio track file URL
+            "duration": int(track.get("duration", 0)),
+            "year":     track.get("releasedate", "")[:4] if track.get("releasedate") else "",
+            "source":   "jamendo",
+        }
 
     def search(self, query: str, limit: int = 20):
         try:
-            r = requests.get(f"{self.BASE}/tracks", params={
-                "client_id": self.CLIENT_ID,
-                "format": "json",
-                "search": query,
-                "limit": limit,
-                "audioformat": "mp32",
-            }, timeout=15)
-            if r.status_code != 200:
-                return []
-            return [self._format(t) for t in r.json().get("results", [])]
+            url = f"https://api.jamendo.com/v3.0/tracks/?client_id={self.client_id}&format=json&search={requests.utils.quote(query)}&limit={limit}"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                return [self._format_song(t) for t in results]
         except Exception as e:
-            print(f"[Jamendo ERROR] {e}")
-            return []
+            print(f"[JAMENDO ERROR] Search failed: {e}")
+        return []
 
-    def song(self, track_id: str):
+    def song(self, song_id: str):
         try:
-            r = requests.get(f"{self.BASE}/tracks", params={
-                "client_id": self.CLIENT_ID,
-                "format": "json",
-                "id": track_id,
-            }, timeout=15)
-            if r.status_code != 200:
-                return None
-            results = r.json().get("results", [])
-            return self._format(results[0]) if results else None
+            url = f"https://api.jamendo.com/v3.0/tracks/?client_id={self.client_id}&format=json&id={song_id}"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                if results:
+                    return self._format_song(results[0])
         except Exception as e:
-            print(f"[Jamendo ERROR] {e}")
-            return None
+            print(f"[JAMENDO ERROR] Lookup failed: {e}")
+        return None
 
     def trending(self, limit: int = 20):
         try:
-            r = requests.get(f"{self.BASE}/tracks", params={
-                "client_id": self.CLIENT_ID,
-                "format": "json",
-                "order": "popularity_week",
-                "limit": limit,
-                "audioformat": "mp32",
-            }, timeout=15)
-            if r.status_code != 200:
-                return []
-            return [self._format(t) for t in r.json().get("results", [])]
+            url = f"https://api.jamendo.com/v3.0/tracks/?client_id={self.client_id}&format=json&order=boost&limit={limit}"
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                results = r.json().get("results", [])
+                return [self._format_song(t) for t in results]
         except Exception as e:
-            print(f"[Jamendo ERROR] {e}")
-            return []
-
-    def _format(self, track):
-        if not track:
-            return {}
-        return {
-            "id": str(track.get("id", "")),
-            "title": track.get("name", "Unknown Title"),
-            "artist": track.get("artist_name", "Unknown Artist"),
-            "album": track.get("album_name", "Jamendo"),
-            "image": track.get("image", "") or track.get("album_image", ""),
-            "url": track.get("audio", "") or track.get("audio_download", ""),
-            "duration": track.get("duration", 0),
-            "year": str(track.get("releasedate", ""))[:4] if track.get("releasedate") else "",
-            "source": "jamendo",
-          }
-                             
+            print(f"[JAMENDO ERROR] Trending failed: {e}")
+        return []
+        
