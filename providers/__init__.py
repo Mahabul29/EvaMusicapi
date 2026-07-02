@@ -6,21 +6,24 @@ from .audiomack import AudiomackProvider
 from .lastfm import LastfmProvider
 from .itunes import ItunesProvider
 from .soundcloud import SoundcloudProvider
+from .hearthis import HearthisProvider   # Added
+from .jamendo import JamendoProvider     # Added
 
-# Active engine pool excluding Spotify
+# The active provider engine pool
 ALL_PROVIDERS: List[MusicProvider] = [
     JioSaavnProvider(),
     YouTubeMusicProvider(),
     AudiomackProvider(),
     LastfmProvider(),
     ItunesProvider(),
-    SoundcloudProvider()
+    SoundcloudProvider(),
+    HearthisProvider(),  # Active full-stream
+    JamendoProvider()    # Active full-stream
 ]
 
 def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[Dict[str, Any]]:
     results = []
     providers_to_use = ALL_PROVIDERS
-    
     if sources:
         providers_to_use = [p for p in ALL_PROVIDERS if p.name in sources]
         
@@ -29,7 +32,6 @@ def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[D
         try:
             print(f"[DEBUG] Querying provider: {provider.name}...")
             songs = provider.search(query, limit=limit)
-            
             if songs:
                 print(f"[DEBUG] {provider.name} returned {len(songs)} tracks.")
                 results.extend(songs)
@@ -37,8 +39,6 @@ def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[D
                 print(f"[DEBUG] {provider.name} returned 0 results.")
         except Exception as e:
             print(f"[ERROR] Provider {provider.name} crashed completely: {e}")
-            
-    print(f"--- Search Finished. Total combined items: {len(results)} ---\n")
     return results
 
 def get_song(song_id: str, source: str) -> Dict[str, Any] | None:
@@ -60,3 +60,4 @@ def trending_all(limit: int = 20) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"[TRENDING ERROR] Provider {provider.name} failed: {e}")
     return results
+            
