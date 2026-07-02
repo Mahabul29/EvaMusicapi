@@ -1,71 +1,61 @@
 from typing import List, Dict, Any
+from .base import MusicProvider
 from .jiosaavn import JioSaavnProvider
-from .jamendo import JamendoProvider
-from .hyperpipe import HyperpipeProvider
 from .youtube_music import YouTubeMusicProvider
-from .spotify import SpotifyProvider  # Import the new Spotify provider
+from .audiomack import AudiomackProvider
+from .lastfm import LastfmProvider
+from .itunes import ItunesProvider
+from .spotify import SpotifyProvider
+from .hyperpipe import HyperpipeProvider
+from .jamendo import JamendoProvider
 
-ALL_PROVIDERS = [
-    JioSaavnProvider(),       # Primary: Bollywood, Indian
-    SpotifyProvider(),        # Global Curated Metadata & Search Results
-    HyperpipeProvider(),      # Western, YouTube Music (piped api alternative)
-    YouTubeMusicProvider(),   # Native YouTube Music + On-Demand yt-dlp Resolution
-    JamendoProvider(),        # Fallback: royalty-free
+# Registering all active providers present in your directory
+ALL_PROVIDERS: List[MusicProvider] = [
+    JioSaavnProvider(),
+    YouTubeMusicProvider(),
+    AudiomackProvider(),
+    LastfmProvider(),
+    ItunesProvider(),
+    SpotifyProvider(),
+    HyperpipeProvider(),
+    JamendoProvider()
 ]
 
-def search_all(query: str, limit: int = 20, sources: List[str] | None = None) -> List[Dict[str, Any]]:
+def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[Dict[str, Any]]:
     results = []
-    for provider in ALL_PROVIDERS:
-        if sources and provider.name not in sources:
-            continue
+    providers_to_use = ALL_PROVIDERS
+    
+    if sources:
+        providers_to_use = [p for p in ALL_PROVIDERS if p.name in sources]
+        
+    for provider in providers_to_use:
         try:
-            songs = provider.search(query, limit)
-            results.extend(songs)
+            songs = provider.search(query, limit=limit)
+            if songs:
+                results.extend(songs)
         except Exception as e:
-            print(f"[Provider ERROR] {provider.name}: {e}")
+            print(f"[SEARCH ERROR] Provider {provider.name} failed: {e}")
+            
     return results
 
-def get_song(song_id: str, source: str = "jiosaavn") -> Dict[str, Any] | None:
-    # 1. Handle native lookups for standard providers
-    for provider in ALL_PROVIDERS:
-        if provider.name == source:
-            try:
-                # If source is 'spotify', this gets metadata but might have a 30s or empty preview link
-                song_data = provider.song(song_id)
-                
-                # 2. SMART CONVERSION FALLBACK FOR SPOTIFY:
-                # If a spotify track is chosen for play, intercept and resolve a full stream via YouTube or JioSaavn
-                if source == "spotify" and song_data:
-                    search_query = f"{song_data['title']} {song_data['artist']}"
-                    
-                    # Try resolving stream through YouTube Music provider
-                    yt_provider = next((p for p in ALL_PROVIDERS if p.name == "youtube"), None)
-                    if yt_provider:
-                        # Search YT for the track context
-                        yt_results = yt_provider.search(search_query, limit=1)
-                        if yt_results:
-                            # Swap in the streamable URL and update duration if needed
-                            song_data["url"] = yt_results[0]["url"]
-                            song_data["source"] = "youtube_resolved"
-                            return song_data
-                            
-                return song_data
-            except Exception as e:
-                print(f"[Provider ERROR] {provider.name}: {e}")
-                return None
+def get_song(song_id: str, source: str) -> Dict[str, Any] | None:
+    provider = next((p for p in ALL_PROVIDERS if p.name == source), None)
+    if provider:
+        try:
+            return provider.song(song_id)
+        except Exception as e:
+            print(f"[SONG LOOKUP ERROR] Provider {source} failed for ID {song_id}: {e}")
     return None
 
 def trending_all(limit: int = 20) -> List[Dict[str, Any]]:
     results = []
+    # Primary engines to populate initial home/trending feeds
     for provider in ALL_PROVIDERS:
         try:
-            # Skip spotify for trending if it lacks a global generic trending feed config, 
-            # or allow it if your provider class supports trending playlists!
-            if provider.name == "spotify" and not hasattr(provider, 'trending'):
-                continue
-            songs = provider.trending(limit)
-            results.extend(songs)
+            songs = provider.trending(limit=limit)
+            if songs:
+                results.extend(songs)
         except Exception as e:
-            print(f"[Provider ERROR] {provider.name}: {e}")
+            print(f"[TRENDING ERROR] Provider {provider.name} failed: {e}")
     return results
-                        
+            
