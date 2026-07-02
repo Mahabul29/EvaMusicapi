@@ -4,13 +4,17 @@ from .jiosaavn import JioSaavnProvider
 from .youtube_music import YouTubeMusicProvider
 from .audiomack import AudiomackProvider
 from .lastfm import LastfmProvider
+from .itunes import ItunesProvider
+from .soundcloud import SoundcloudProvider
 
-# Registered engines
+# Active engine pool excluding Spotify
 ALL_PROVIDERS: List[MusicProvider] = [
     JioSaavnProvider(),
     YouTubeMusicProvider(),
     AudiomackProvider(),
-    LastfmProvider()
+    LastfmProvider(),
+    ItunesProvider(),
+    SoundcloudProvider()
 ]
 
 def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[Dict[str, Any]]:
@@ -28,8 +32,6 @@ def search_all(query: str, limit: int = 20, sources: List[str] = None) -> List[D
             
             if songs:
                 print(f"[DEBUG] {provider.name} returned {len(songs)} tracks.")
-                # Log a sample track structure to see what fields exist
-                print(f"[DEBUG] Sample track format from {provider.name}: {songs[0]}")
                 results.extend(songs)
             else:
                 print(f"[DEBUG] {provider.name} returned 0 results.")
@@ -58,4 +60,3 @@ def trending_all(limit: int = 20) -> List[Dict[str, Any]]:
         except Exception as e:
             print(f"[TRENDING ERROR] Provider {provider.name} failed: {e}")
     return results
-                
