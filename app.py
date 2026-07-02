@@ -66,7 +66,12 @@ def api_trending():
 @app.route("/api/song/<song_id>")
 @app.route("/api/song/<source>/<song_id>")
 def api_song(song_id, source=None):
-    # Contextual fallback source detection based on ID layout if path segment omitted
+    # 1. Clean parameters safely
+    song_id = str(song_id).strip()
+    if source:
+        source = str(source).lower().strip()
+
+    # 2. Contextual detector if source path parameter wasn't supplied explicitly
     if not source:
         if song_id.startswith("lastfm_"):
             source = "lastfm"
@@ -75,37 +80,51 @@ def api_song(song_id, source=None):
         else:
             source = "youtube_music" if len(song_id) == 11 else "jiosaavn"
 
+    # 3. Pull structural dictionary metadata out of your provider class
     song = get_song(song_id, source=source)
     if not song:
         return jsonify({"error": f"Track could not be resolved from provider: {source}"}), 404
 
-    # INTERCEPT PREVIEWS: Catch short 30-sec iTunes files or any metadata placeholders
-    if source == "itunes" or "preview.apple.com" in str(song.get("url", "")) or "placeholder" in str(song.get("url", "")):
+    # 4. CRITICAL INTERCEPTOR FORCE-PLAY PIPELINE
+    # If the source belongs to a metadata engine or preview-limited service,
+    # we intercept it and immediately convert it to a full YouTube stream.
+    if source in ["itunes", "lastfm", "audiomack"]:
         search_target = f"{song['title']} {song['artist']}"
-        yt_provider = next((p for p in ALL_PROVIDERS if p.name == "youtube_music"), None)
+        print(f"[RESOLVER] Intercepted {source} track. Searching YouTube for full stream: '{search_target}'")
         
+        yt_provider = next((p for p in ALL_PROVIDERS if p.name == "youtube_music"), None)
         if yt_provider:
-            # Query YouTube Music in the background to find a full-length match
-            matches = yt_provider.search(search_target, limit=1)
-            if matches and matches[0].get("id"):
-                resolved_stream = resolve_youtube_stream_url(matches[0]["id"])
-                if resolved_stream:
-                    song["url"] = resolved_stream
-                    # Swap out the 30-second duration for the actual full-length timeline format
-                    song["duration"] = matches[0].get("duration", song["duration"])
-                    return jsonify(song)
+            try:
+                # Query YouTube Music background index
+                matches = yt_provider.search(search_target, limit=1)
+                if matches and matches[0].get("id"):
+                    target_video_id = matches[0]["id"]
                     
-        # Return snippet fallback if background match completely fails
+                    # Run it through your yt-dlp direct extractor
+                    resolved_stream = resolve_youtube_stream_url(target_video_id)
+                    if resolved_stream:
+                        print(f"[RESOLVER] Successfully found match! Video ID: {target_video_id}")
+                        song["url"] = resolved_stream
+                        # Swap out the 30-sec limit layout for the real track duration
+                        song["duration"] = matches[0].get("duration", song["duration"])
+                        return jsonify(song)
+            except Exception as search_err:
+                print(f"[RESOLVER ERROR] Background matching failed: {search_err}")
+                    
+        # If background lookup fails completely, send the data as-is (last resort snippet)
+        print("[RESOLVER ALERT] Fallback search failed. Defaulting back to snippet link.")
         return jsonify(song)
 
-    # STANDARD STREAM PROCESSING: For native YouTube Music tracks
-    if source == "youtube_music" or song.get("source") == "youtube_music":
+    # 5. STANDARD STREAM PROCESSING: For direct YouTube Music selections
+    if source == "youtube_music":
         direct_stream = resolve_youtube_stream_url(song_id)
         if direct_stream:
             song["url"] = direct_stream
+            return jsonify(song)
         else:
             return jsonify({"error": "Failed to extract direct audio from YouTube asset"}), 404
 
+    # Return directly for stable native streaming setups (like JioSaavn)
     return jsonify(song)
 
 
@@ -135,4 +154,4 @@ def api_debug():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     app.run(host="0.0.0.0", port=port, debug=False)
-    
+        
