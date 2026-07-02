@@ -7,7 +7,7 @@ class YouTubeMusicProvider(MusicProvider):
     name = "youtube_music"
 
     def __init__(self):
-        # Initializing without authentication files for public scraping.
+        # Public search only — no auth needed for search/metadata lookups.
         self.yt = YTMusic()
         self._last_good_trending = []
 
@@ -49,22 +49,27 @@ class YouTubeMusicProvider(MusicProvider):
 
         # Extract video ID
         video_id = song.get("videoId", "")
-        
-        # CRITICAL FIX: We set a temporary placeholder so this song survives the 
-        # Flask router's [valid = [s for s in results if s.get("url")]] filter.
-        # It will be dynamically replaced with a real streaming link inside app.py using yt-dlp!
-        stream_url = f"placeholder_for_{video_id}" if video_id else ""
+
+        # PLAYBACK: instead of resolving a raw audio stream (yt-dlp), we hand the
+        # frontend a video_id it feeds into the official YouTube IFrame Player API.
+        # This plays the full track through YouTube's own embedded player —
+        # legal, ad-supported correctly, and immune to the blocking you were hitting
+        # with direct extraction.
+        embed_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1" if video_id else ""
 
         return {
-            "id":       str(video_id),
-            "title":    song.get("title", "Unknown Title"),
-            "artist":   artist_name or "Unknown Artist",
-            "album":    album_name,
-            "image":    image_url or "/static/images/default-album.png",
-            "url":      stream_url,
-            "duration": duration,
-            "year":     song.get("year", ""),
-            "source":   "youtube_music",
+            "id":         str(video_id),
+            "title":      song.get("title", "Unknown Title"),
+            "artist":     artist_name or "Unknown Artist",
+            "album":      album_name,
+            "image":      image_url or "/static/images/default-album.png",
+            "video_id":   video_id,      # used by the frontend IFrame player
+            "embed_url":  embed_url,     # convenience direct-embed link
+            "url":        embed_url,     # kept for backward compatibility with existing router
+            "duration":   duration,
+            "year":       song.get("year", ""),
+            "source":     "youtube_music",
+            "playback":   "embed",       # tells the frontend how to play this result
         }
 
     def search(self, query: str, limit: int = 20):
@@ -72,7 +77,6 @@ class YouTubeMusicProvider(MusicProvider):
         Searches the public YouTube Music catalog, targeting specifically 'songs' results.
         """
         try:
-            # Filtering by 'songs' guarantees the response structure strictly maps to track schemes
             raw_results = self.yt.search(query=query, filter="songs", limit=limit)
             return [self._format_song(s) for s in raw_results if s.get("resultType") == "song" or "videoId" in s]
         except Exception as e:
@@ -87,8 +91,7 @@ class YouTubeMusicProvider(MusicProvider):
             raw_song = self.yt.get_song(videoId=song_id)
             if raw_song and "videoDetails" in raw_song:
                 details = raw_song["videoDetails"]
-                
-                # Normalize get_song schema to fit our standard parser expectations
+
                 normalized_song = {
                     "videoId": details.get("videoId"),
                     "title": details.get("title"),
@@ -119,4 +122,4 @@ class YouTubeMusicProvider(MusicProvider):
                 self._last_good_trending = songs
                 return songs
         return self._last_good_trending or []
-        
+            
